@@ -8,14 +8,13 @@ const AVATARS = [
   'https://api.dicebear.com/7.x/adventurer/svg?seed=Luna'
 ];
 
-// --- UPDATE SUARA: Tambah Bunyi Tetot ---
 const correctSfx = new Audio('https://assets.mixkit.co/active_storage/sfx/600/600-preview.mp3'); 
 const clickSfx = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'); 
-const failSfx = new Audio('https://www.myinstants.com/media/sounds/tetot-indonesia.mp3'); // Bunyi "Tetot"
+const failSfx = new Audio('https://www.myinstants.com/media/sounds/tetot-indonesia.mp3'); 
 
 const playSound = (audio) => {
   audio.currentTime = 0;
-  audio.volume = 0.4; // Volume sedang agar nyaman
+  audio.volume = 0.4;
   audio.play().catch(err => console.log("Audio play blocked", err));
 };
 
@@ -28,6 +27,9 @@ const App = () => {
   const [showResult, setShowResult] = useState(false);
   const [timer, setTimer] = useState(60);
   const [isStarted, setIsStarted] = useState(false);
+  
+  // LOGIKA BARU: Simpan riwayat jawaban
+  const [userAnswers, setUserAnswers] = useState([]);
 
   const fetchQuestions = async () => {
     try {
@@ -43,12 +45,13 @@ const App = () => {
   useEffect(() => {
     const saved = localStorage.getItem('quiz_progress');
     if (saved && user) {
-      const { index, savedScore, savedTime, savedQuestions, savedAvatar } = JSON.parse(saved);
+      const { index, savedScore, savedTime, savedQuestions, savedAvatar, savedUserAnswers } = JSON.parse(saved);
       setQuestions(savedQuestions);
       setCurrentIndex(index);
       setScore(savedScore);
       setTimer(savedTime);
       setAvatar(savedAvatar || AVATARS[0]);
+      setUserAnswers(savedUserAnswers || []);
       setIsStarted(true);
     }
   }, [user]);
@@ -60,22 +63,33 @@ const App = () => {
         setTimer((prev) => {
           const newTime = prev - 1;
           localStorage.setItem('quiz_progress', JSON.stringify({
-            index: currentIndex, savedScore: score, savedTime: newTime, savedQuestions: questions, savedAvatar: avatar
+            index: currentIndex, 
+            savedScore: score, 
+            savedTime: newTime, 
+            savedQuestions: questions, 
+            savedAvatar: avatar,
+            savedUserAnswers: userAnswers
           }));
           return newTime;
         });
       }, 1000);
     } else if (timer === 0 && isStarted) setShowResult(true);
     return () => clearInterval(interval);
-  }, [isStarted, timer, showResult, currentIndex, score, questions, avatar]);
+  }, [isStarted, timer, showResult, currentIndex, score, questions, avatar, userAnswers]);
 
-  const handleAnswer = (isCorrect) => {
+  const handleAnswer = (selectedAns, isCorrect) => {
     playSound(clickSfx); 
-    if (isCorrect) {
-      playSound(correctSfx);
-    } else {
-      playSound(failSfx); // Ini bunyi tetot-nya
-    }
+    if (isCorrect) playSound(correctSfx);
+    else playSound(failSfx);
+
+    // LOGIKA BARU: Tambahkan ke riwayat
+    const newAnswer = {
+      question: questions[currentIndex].question,
+      selected: selectedAns,
+      correct: questions[currentIndex].correct_answer,
+      isCorrect: isCorrect
+    };
+    setUserAnswers([...userAnswers, newAnswer]);
 
     const nextScore = isCorrect ? score + 1 : score;
     const nextIndex = currentIndex + 1;
@@ -123,50 +137,43 @@ const App = () => {
   if (showResult) {
     const isWin = score >= 5;
     return (
-      <motion.div 
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className={`min-h-screen flex items-center justify-center p-4 ${isWin ? 'bg-gradient-to-br from-[#FFD93D] via-[#FF8400] to-[#FF449F]' : 'bg-gradient-to-br from-[#2D31FA] to-[#9092FF]'}`}
-      >
-        <motion.div 
-          initial={{ scale: 0.8, y: 30 }} animate={{ scale: 1, y: 0 }}
-          className="bg-white/10 backdrop-blur-3xl border-2 border-white/40 rounded-[3.5rem] p-12 w-full max-w-2xl text-center shadow-2xl relative overflow-hidden"
-        >
-          <div className="absolute top-4 left-4 text-5xl opacity-20">🌈</div>
-          <div className="absolute bottom-4 right-4 text-5xl opacity-20">🚀</div>
-
-          <motion.img 
-            animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}
-            src={avatar} className="w-32 h-32 bg-white rounded-[2rem] mx-auto mb-6 border-8 border-white/50 shadow-xl" alt="avatar" 
-          />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`min-h-screen py-10 flex flex-col items-center p-4 ${isWin ? 'bg-gradient-to-br from-[#FFD93D] via-[#FF8400] to-[#FF449F]' : 'bg-gradient-to-br from-[#2D31FA] to-[#9092FF]'}`}>
+        
+        <motion.div initial={{ scale: 0.8, y: 30 }} animate={{ scale: 1, y: 0 }} className="bg-white/10 backdrop-blur-3xl border-2 border-white/40 rounded-[3.5rem] p-10 w-full max-w-2xl text-center shadow-2xl mb-8 relative">
+          <motion.img animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }} src={avatar} className="w-24 h-24 bg-white rounded-[2rem] mx-auto mb-4 border-4 border-white shadow-xl" alt="avatar" />
+          <h2 className="text-4xl font-black text-white mb-6 uppercase italic tracking-tighter">{isWin ? "MANTAP JIWA!" : "KEREN BANGET!"}</h2>
           
-          <h2 className="text-5xl font-black text-white mb-2 tracking-tighter uppercase italic">
-            {isWin ? "MANTAP JIWA!" : "KEREN BANGET!"}
-          </h2>
-          <p className="text-white/80 font-bold mb-10 tracking-widest text-sm uppercase">Hasil akhir kamu, {user}!</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-            <div className="bg-white/20 p-6 rounded-3xl text-white border border-white/10">
-                <p className="text-[10px] font-black uppercase opacity-60">Soal</p>
-                <p className="text-3xl font-black">{currentIndex}</p>
-            </div>
-            <div className="bg-white p-6 rounded-3xl text-[#FF8400] shadow-2xl scale-110">
-                <p className="text-[10px] font-black uppercase opacity-60">Skor</p>
-                <p className="text-5xl font-black">{score}</p>
-            </div>
-            <div className="bg-white/20 p-6 rounded-3xl text-white border border-white/10">
-                <p className="text-[10px] font-black uppercase opacity-60">Salah</p>
-                <p className="text-3xl font-black">{currentIndex - score}</p>
-            </div>
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="bg-white/20 p-4 rounded-2xl text-white"><p className="text-[10px] font-bold uppercase opacity-60">Soal</p><p className="text-2xl font-black">{currentIndex}</p></div>
+            <div className="bg-white p-4 rounded-2xl text-[#FF8400] shadow-xl"><p className="text-[10px] font-bold uppercase opacity-60">Skor</p><p className="text-2xl font-black">{score}</p></div>
+            <div className="bg-white/20 p-4 rounded-2xl text-white"><p className="text-[10px] font-bold uppercase opacity-60">Salah</p><p className="text-2xl font-black">{currentIndex - score}</p></div>
           </div>
 
-          <motion.button 
-            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-            onClick={() => { localStorage.clear(); window.location.reload(); }} 
-            className="bg-white text-[#FF449F] font-black px-12 py-5 rounded-3xl text-xl shadow-xl uppercase tracking-widest active:scale-95 transition-all"
-          >
-            Main Lagi?
-          </motion.button>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="bg-white text-[#FF449F] font-black px-10 py-4 rounded-3xl shadow-lg uppercase tracking-widest hover:scale-105 transition-all mb-4">Main Lagi</button>
         </motion.div>
+
+        {/* --- RIWAYAT JAWABAN (FITUR BARU) --- */}
+        <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-2xl bg-white/95 backdrop-blur-md rounded-[2.5rem] p-8 shadow-xl">
+          <h3 className="text-2xl font-black text-gray-800 mb-6 text-center">Riwayat Soal 📝</h3>
+          <div className="space-y-4">
+            {userAnswers.map((item, idx) => (
+              <div key={idx} className={`p-5 rounded-3xl border-2 ${item.isCorrect ? 'border-green-100 bg-green-50' : 'border-red-100 bg-red-50'}`}>
+                <p className="font-bold text-gray-800 mb-2" dangerouslySetInnerHTML={{ __html: `${idx + 1}. ${item.question}` }} />
+                <div className="text-sm">
+                  <p className={`${item.isCorrect ? 'text-green-600' : 'text-red-600'} font-bold`}>
+                    Kamu: <span dangerouslySetInnerHTML={{ __html: item.selected }} /> {item.isCorrect ? '✅' : '❌'}
+                  </p>
+                  {!item.isCorrect && (
+                    <p className="text-green-600 font-bold mt-1">
+                      Benar: <span dangerouslySetInnerHTML={{ __html: item.correct }} />
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
       </motion.div>
     );
   }
@@ -199,7 +206,7 @@ const App = () => {
               {options.map((ans, i) => (
                 <motion.button 
                   whileHover={{ y: -5, shadow: "0 10px 30px rgba(109, 93, 252, 0.2)" }} whileTap={{ scale: 0.98 }}
-                  key={i} onClick={() => handleAnswer(ans === currentQ.correct_answer)}
+                  key={i} onClick={() => handleAnswer(ans, ans === currentQ.correct_answer)}
                   className="group bg-white border-4 border-gray-50 p-7 rounded-[2.5rem] text-left hover:border-[#6d5dfc] transition-all flex items-center gap-5 shadow-sm"
                 >
                   <span className="w-12 h-12 flex items-center justify-center bg-gray-50 rounded-2xl font-black text-[#6d5dfc] group-hover:bg-[#6d5dfc] group-hover:text-white transition-colors">
