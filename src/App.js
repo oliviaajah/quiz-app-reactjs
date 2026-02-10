@@ -1,14 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const AVATARS = [
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix',
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=Aneka',
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=Buddy',
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=Luna'
+];
+
+// --- UPDATE SUARA: Tambah Bunyi Tetot ---
+const correctSfx = new Audio('https://assets.mixkit.co/active_storage/sfx/600/600-preview.mp3'); 
+const clickSfx = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'); 
+const failSfx = new Audio('https://www.myinstants.com/media/sounds/tetot-indonesia.mp3'); // Bunyi "Tetot"
+
+const playSound = (audio) => {
+  audio.currentTime = 0;
+  audio.volume = 0.4; // Volume sedang agar nyaman
+  audio.play().catch(err => console.log("Audio play blocked", err));
+};
 
 const App = () => {
   const [user, setUser] = useState(localStorage.getItem('quiz_user') || '');
+  const [avatar, setAvatar] = useState(localStorage.getItem('quiz_avatar') || AVATARS[0]);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [timer, setTimer] = useState(60);
   const [isStarted, setIsStarted] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
 
   const fetchQuestions = async () => {
     try {
@@ -17,18 +36,19 @@ const App = () => {
       setQuestions(data.results);
       setIsStarted(true);
     } catch (error) {
-      alert("Koneksi bermasalah. Pastikan internetmu aktif!");
+      alert("Koneksi terputus!");
     }
   };
 
   useEffect(() => {
-    const savedProgress = localStorage.getItem('quiz_progress');
-    if (savedProgress && user) {
-      const { index, savedScore, savedTime, savedQuestions } = JSON.parse(savedProgress);
+    const saved = localStorage.getItem('quiz_progress');
+    if (saved && user) {
+      const { index, savedScore, savedTime, savedQuestions, savedAvatar } = JSON.parse(saved);
       setQuestions(savedQuestions);
       setCurrentIndex(index);
       setScore(savedScore);
       setTimer(savedTime);
+      setAvatar(savedAvatar || AVATARS[0]);
       setIsStarted(true);
     }
   }, [user]);
@@ -40,156 +60,159 @@ const App = () => {
         setTimer((prev) => {
           const newTime = prev - 1;
           localStorage.setItem('quiz_progress', JSON.stringify({
-            index: currentIndex, savedScore: score, savedTime: newTime, savedQuestions: questions
+            index: currentIndex, savedScore: score, savedTime: newTime, savedQuestions: questions, savedAvatar: avatar
           }));
           return newTime;
         });
       }, 1000);
-    } else if (timer === 0 && isStarted) {
+    } else if (timer === 0 && isStarted) setShowResult(true);
+    return () => clearInterval(interval);
+  }, [isStarted, timer, showResult, currentIndex, score, questions, avatar]);
+
+  const handleAnswer = (isCorrect) => {
+    playSound(clickSfx); 
+    if (isCorrect) {
+      playSound(correctSfx);
+    } else {
+      playSound(failSfx); // Ini bunyi tetot-nya
+    }
+
+    const nextScore = isCorrect ? score + 1 : score;
+    const nextIndex = currentIndex + 1;
+    setScore(nextScore);
+
+    if (nextIndex < questions.length) {
+      setCurrentIndex(nextIndex);
+    } else {
       setShowResult(true);
       localStorage.removeItem('quiz_progress');
     }
-    return () => clearInterval(interval);
-  }, [isStarted, timer, showResult, currentIndex, score, questions]);
-
-  const handleAnswer = (ans, isCorrect) => {
-    setSelectedAnswer(ans);
-    
-    // Delay sedikit agar user bisa melihat pilihan yang ia klik (UX Feedback)
-    setTimeout(() => {
-      const nextScore = isCorrect ? score + 1 : score;
-      const nextIndex = currentIndex + 1;
-      setScore(nextScore);
-      setSelectedAnswer(null);
-
-      if (nextIndex < questions.length) {
-        setCurrentIndex(nextIndex);
-      } else {
-        setShowResult(true);
-        localStorage.removeItem('quiz_progress');
-      }
-    }, 400);
   };
 
-  // 1. Tampilan Login yang Elegan
   if (!user || !isStarted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center p-4">
-        <div className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/20 text-center">
-          <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="text-4xl text-white">🚀</span>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen bg-[#6d5dfc] flex items-center justify-center p-6 font-sans">
+        <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl text-center">
+          <h1 className="text-3xl font-black text-[#2d2d2d] mb-2 font-mono tracking-tighter">QUIZ MASTER</h1>
+          <p className="text-gray-400 mb-8 font-bold uppercase tracking-widest text-[10px]">Pilih Avatar Favoritmu</p>
+          <div className="flex justify-center gap-4 mb-8">
+            {AVATARS.map((src, i) => (
+              <motion.img 
+                whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                key={i} src={src} className={`w-16 h-16 rounded-2xl cursor-pointer transition-all border-4 ${avatar === src ? 'border-[#6d5dfc] bg-indigo-50 shadow-lg' : 'border-transparent opacity-30'}`}
+                onClick={() => { playSound(clickSfx); setAvatar(src); }}
+              />
+            ))}
           </div>
-          <h1 className="text-4xl font-black text-white mb-2 tracking-tight">QUIZ MASTER</h1>
-          <p className="text-indigo-100 mb-8 font-medium">Siap untuk tantangan hari ini?</p>
           <form onSubmit={(e) => {
             e.preventDefault();
             const name = e.target.username.value;
             setUser(name);
             localStorage.setItem('quiz_user', name);
+            localStorage.setItem('quiz_avatar', avatar);
             fetchQuestions();
           }}>
-            <input 
-              name="username" 
-              className="w-full bg-white/10 border border-white/30 p-4 rounded-xl mb-4 text-white placeholder-indigo-200 outline-none focus:ring-2 focus:ring-white/50 transition"
-              placeholder="Masukkan namamu..." 
-              required 
-            />
-            <button className="w-full bg-white text-indigo-600 font-bold py-4 rounded-xl hover:bg-indigo-50 transform hover:-translate-y-1 transition-all shadow-xl">
-              MULAI SEKARANG
-            </button>
+            <input name="username" className="w-full bg-gray-100 p-4 rounded-2xl mb-4 outline-none border-2 border-transparent focus:border-[#6d5dfc] font-bold" placeholder="Siapa namamu?" required />
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-[#6d5dfc] text-white font-black py-4 rounded-2xl shadow-lg shadow-[#6d5dfc]/30 uppercase tracking-widest">Ayo Mulai!</motion.button>
           </form>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
-  // 2. Tampilan Hasil (Scoreboard)
   if (showResult) {
+    const isWin = score >= 5;
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-slate-800 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-lg text-center border border-slate-700">
-          <h2 className="text-3xl font-bold text-white mb-6">Quiz Selesai! ✨</h2>
-          <div className="relative inline-block mb-8">
-            <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
-              {Math.round((score / questions.length) * 100)}%
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        className={`min-h-screen flex items-center justify-center p-4 ${isWin ? 'bg-gradient-to-br from-[#FFD93D] via-[#FF8400] to-[#FF449F]' : 'bg-gradient-to-br from-[#2D31FA] to-[#9092FF]'}`}
+      >
+        <motion.div 
+          initial={{ scale: 0.8, y: 30 }} animate={{ scale: 1, y: 0 }}
+          className="bg-white/10 backdrop-blur-3xl border-2 border-white/40 rounded-[3.5rem] p-12 w-full max-w-2xl text-center shadow-2xl relative overflow-hidden"
+        >
+          <div className="absolute top-4 left-4 text-5xl opacity-20">🌈</div>
+          <div className="absolute bottom-4 right-4 text-5xl opacity-20">🚀</div>
+
+          <motion.img 
+            animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}
+            src={avatar} className="w-32 h-32 bg-white rounded-[2rem] mx-auto mb-6 border-8 border-white/50 shadow-xl" alt="avatar" 
+          />
+          
+          <h2 className="text-5xl font-black text-white mb-2 tracking-tighter uppercase italic">
+            {isWin ? "MANTAP JIWA!" : "KEREN BANGET!"}
+          </h2>
+          <p className="text-white/80 font-bold mb-10 tracking-widest text-sm uppercase">Hasil akhir kamu, {user}!</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+            <div className="bg-white/20 p-6 rounded-3xl text-white border border-white/10">
+                <p className="text-[10px] font-black uppercase opacity-60">Soal</p>
+                <p className="text-3xl font-black">{currentIndex}</p>
             </div>
-            <p className="text-slate-400 font-medium">Skor Kamu</p>
+            <div className="bg-white p-6 rounded-3xl text-[#FF8400] shadow-2xl scale-110">
+                <p className="text-[10px] font-black uppercase opacity-60">Skor</p>
+                <p className="text-5xl font-black">{score}</p>
+            </div>
+            <div className="bg-white/20 p-6 rounded-3xl text-white border border-white/10">
+                <p className="text-[10px] font-black uppercase opacity-60">Salah</p>
+                <p className="text-3xl font-black">{currentIndex - score}</p>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 mb-10 text-center">
-            <div className="bg-slate-700/50 p-4 rounded-2xl"><p className="text-xs text-slate-400 uppercase">Soal</p><p className="text-xl font-bold text-white">{questions.length}</p></div>
-            <div className="bg-slate-700/50 p-4 rounded-2xl"><p className="text-xs text-slate-400 uppercase">Dijawab</p><p className="text-xl font-bold text-cyan-400">{currentIndex}</p></div>
-            <div className="bg-slate-700/50 p-4 rounded-2xl"><p className="text-xs text-slate-400 uppercase">Benar</p><p className="text-xl font-bold text-green-400">{score}</p></div>
-          </div>
-          <button 
-            onClick={() => { localStorage.clear(); window.location.reload(); }}
-            className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white py-4 rounded-2xl font-bold hover:opacity-90 transition shadow-lg shadow-cyan-500/20"
+
+          <motion.button 
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            onClick={() => { localStorage.clear(); window.location.reload(); }} 
+            className="bg-white text-[#FF449F] font-black px-12 py-5 rounded-3xl text-xl shadow-xl uppercase tracking-widest active:scale-95 transition-all"
           >
-            MAINKAN LAGI
-          </button>
-        </div>
-      </div>
+            Main Lagi?
+          </motion.button>
+        </motion.div>
+      </motion.div>
     );
   }
 
-  // 3. Tampilan Utama Kuis
   const currentQ = questions[currentIndex];
   const options = [...currentQ.incorrect_answers, currentQ.correct_answer].sort();
-  const progress = ((currentIndex + 1) / questions.length) * 100;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center py-12 px-4 font-sans text-slate-800">
-      <div className="w-full max-w-3xl">
-        {/* Header Stats */}
-        <div className="flex justify-between items-end mb-4 px-2">
-          <div>
-            <h4 className="text-slate-400 font-bold text-xs uppercase tracking-widest">Pemain</h4>
-            <p className="text-lg font-bold text-slate-800">👋 {user}</p>
+    <div className="min-h-screen bg-[#F8F9FD] flex flex-col items-center py-12 px-4">
+      <div className="w-full max-w-4xl bg-white rounded-[3.5rem] p-12 shadow-sm border border-gray-100 relative overflow-hidden">
+        <div className="flex justify-between items-center mb-10">
+          <div className="flex items-center gap-4 bg-gray-50 pr-6 rounded-full py-1">
+            <img src={avatar} className="w-16 h-16 bg-white rounded-2xl p-2 border-2 border-gray-50 shadow-sm" alt="avatar" />
+            <span className="font-black text-gray-800 uppercase tracking-tighter">{user}</span>
           </div>
-          <div className="text-right">
-            <div className={`text-2xl font-black ${timer < 10 ? 'text-red-500 animate-bounce' : 'text-indigo-600'}`}>
-              00:{timer < 10 ? `0${timer}` : timer}
+          <motion.div animate={timer < 10 ? { scale: [1, 1.1, 1], color: '#ff4444' } : {}} transition={{ repeat: Infinity }} className="bg-gray-900 text-white px-8 py-3 rounded-[1.5rem] font-black text-2xl tracking-tighter italic">
+            {timer}s
+          </motion.div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div key={currentIndex} initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }} transition={{ duration: 0.4 }}>
+            <div className="mb-12 text-center">
+              <div className="w-full bg-gray-100 h-5 rounded-full mb-10 overflow-hidden border-4 border-white shadow-inner">
+                <motion.div initial={{ width: 0 }} animate={{ width: `${((currentIndex+1)/questions.length)*100}%` }} className="bg-gradient-to-r from-[#6d5dfc] to-[#9092FF] h-full rounded-full"></motion.div>
+              </div>
+              <h3 className="text-3xl font-black text-gray-800 leading-snug px-4" dangerouslySetInnerHTML={{ __html: currentQ.question }} />
             </div>
-            <p className="text-xs font-bold text-slate-400 uppercase">Sisa Waktu</p>
-          </div>
-        </div>
-
-        {/* Progress Bar Modern */}
-        <div className="w-full bg-slate-200 h-3 rounded-full mb-10 overflow-hidden flex">
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full transition-all duration-700 ease-out" style={{ width: `${progress}%` }}></div>
-        </div>
-
-        {/* Question Card */}
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
-          <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-xs font-black uppercase mb-6 inline-block">
-            Pertanyaan {currentIndex + 1} dari {questions.length}
-          </span>
-          <h3 className="text-2xl font-bold text-slate-800 mb-10 leading-snug" dangerouslySetInnerHTML={{ __html: currentQ.question }} />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {options.map((ans, i) => (
-              <button 
-                key={i} 
-                onClick={() => handleAnswer(ans, ans === currentQ.correct_answer)}
-                className={`group flex items-center p-5 rounded-2xl border-2 transition-all duration-200 text-left
-                  ${selectedAnswer === ans ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 hover:border-indigo-200 hover:bg-slate-50'}
-                `}
-              >
-                <span className={`w-10 h-10 flex items-center justify-center rounded-xl mr-4 font-black transition-colors
-                  ${selectedAnswer === ans ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-500'}
-                `}>
-                  {String.fromCharCode(65 + i)}
-                </span>
-                <span className="font-semibold flex-1" dangerouslySetInnerHTML={{ __html: ans }} />
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        <p className="mt-12 text-center text-slate-400 text-sm font-medium tracking-wide">
-          DESIGNED BY <span className="text-indigo-500 font-bold">PUTRI OLIVIA</span> • FRONTEND DEV 2026
-        </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {options.map((ans, i) => (
+                <motion.button 
+                  whileHover={{ y: -5, shadow: "0 10px 30px rgba(109, 93, 252, 0.2)" }} whileTap={{ scale: 0.98 }}
+                  key={i} onClick={() => handleAnswer(ans === currentQ.correct_answer)}
+                  className="group bg-white border-4 border-gray-50 p-7 rounded-[2.5rem] text-left hover:border-[#6d5dfc] transition-all flex items-center gap-5 shadow-sm"
+                >
+                  <span className="w-12 h-12 flex items-center justify-center bg-gray-50 rounded-2xl font-black text-[#6d5dfc] group-hover:bg-[#6d5dfc] group-hover:text-white transition-colors">
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span className="font-bold text-gray-700 text-lg flex-1" dangerouslySetInnerHTML={{ __html: ans }} />
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
+      <p className="mt-10 text-gray-400 font-black italic tracking-[0.3em] text-[10px] uppercase text-center opacity-50">Putri Olivia • Frontend Developer Portfolio</p>
     </div>
   );
 };
