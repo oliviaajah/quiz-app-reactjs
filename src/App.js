@@ -8,11 +8,14 @@ const AVATARS = [
   'https://api.dicebear.com/7.x/adventurer/svg?seed=Luna'
 ];
 
+// --- SOUND ASSETS ---
 const clickSfx = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'); 
+// Suara Fanfare/Tada yang menandakan kuis selesai
+const finishSfx = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'); 
 
-const playSound = (audio) => {
+const playSound = (audio, volume = 0.4) => {
   audio.currentTime = 0;
-  audio.volume = 0.4;
+  audio.volume = volume;
   audio.play().catch(err => console.log("Audio play blocked", err));
 };
 
@@ -27,25 +30,21 @@ const App = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [userAnswers, setUserAnswers] = useState([]);
   const [leaderboard, setLeaderboard] = useState(JSON.parse(localStorage.getItem('quiz_leaderboard')) || []);
-  
-  // PERBAIKAN: Tambahkan state loading agar tidak error saat fetch data
   const [loading, setLoading] = useState(false);
 
   const fetchQuestions = async () => {
-    setLoading(true); // Mulai loading
+    setLoading(true);
     try {
       const response = await fetch('https://opentdb.com/api.php?amount=10&type=multiple');
       const data = await response.json();
       if (data.results && data.results.length > 0) {
         setQuestions(data.results);
         setIsStarted(true);
-      } else {
-        alert("Gagal mengambil soal, silakan coba lagi!");
       }
     } catch (error) {
       alert("Koneksi terputus!");
     } finally {
-      setLoading(false); // Selesai loading
+      setLoading(false);
     }
   };
 
@@ -83,6 +82,10 @@ const App = () => {
 
   const handleFinish = (finalScore = score, finalAnswers = userAnswers) => {
     setShowResult(true);
+    
+    // --- TRIGGER SUARA KUIS SELESAI ---
+    playSound(finishSfx, 0.6); 
+
     const newEntry = { 
       name: user, 
       avatar, 
@@ -109,12 +112,10 @@ const App = () => {
       <AnimatedBg />
       
       <AnimatePresence mode="wait">
-        {/* HALAMAN 1: LOGIN & LOADING */}
         {!isStarted && !showResult && (
           <motion.div key="login" initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className="w-full max-w-md bg-white/80 backdrop-blur-lg rounded-[2.5rem] p-10 shadow-2xl text-center border border-white">
             <h1 className="text-3xl font-black text-[#2d2d2d] mb-2 font-mono tracking-tighter uppercase">Quiz Master</h1>
             <p className="text-gray-400 mb-8 font-bold uppercase tracking-widest text-[10px]">{loading ? "Memuat Soal..." : "Pilih Avatar & Mulai"}</p>
-            
             {loading ? (
               <div className="flex justify-center py-10">
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-12 h-12 border-4 border-[#6d5dfc] border-t-transparent rounded-full" />
@@ -139,7 +140,6 @@ const App = () => {
           </motion.div>
         )}
 
-        {/* HALAMAN 2: KUIS (Diberi safety check questions.length > 0) */}
         {isStarted && !showResult && questions.length > 0 && (
           <motion.div key="quiz" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -50 }} className="w-full max-w-4xl bg-white/80 backdrop-blur-xl rounded-[3.5rem] p-10 shadow-2xl border border-white relative">
             <div className="flex justify-between items-center mb-8">
@@ -171,18 +171,18 @@ const App = () => {
           </motion.div>
         )}
 
-        {/* HALAMAN 3: HASIL */}
         {showResult && (
           <motion.div key="result" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-4xl space-y-6">
             <div className={`rounded-[3rem] p-10 text-center shadow-2xl border-4 border-white ${score >= 5 ? 'bg-gradient-to-br from-[#FFD93D] to-[#FF449F]' : 'bg-gradient-to-br from-[#2D31FA] to-[#9092FF]'}`}>
               <motion.img animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }} src={avatar} className="w-24 h-24 bg-white rounded-full mx-auto mb-4 border-4 border-white shadow-lg" />
               <h2 className="text-4xl font-black text-white mb-2 uppercase italic tracking-tighter">{score >= 5 ? "Keren Banget! 🔥" : "Coba Lagi Ya! ✨"}</h2>
-              <div className="bg-white/20 inline-block px-8 py-2 rounded-full text-white font-black mb-6">SKOR: {score}</div>
+              <div className="bg-white/20 inline-block px-8 py-2 rounded-full text-white font-black mb-6">SKOR AKHIR: {score}</div>
               <br />
               <button onClick={() => window.location.reload()} className="bg-white text-gray-900 font-black px-10 py-4 rounded-3xl uppercase tracking-widest hover:scale-105 transition-all">Main Lagi</button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
+              {/* Leaderboard & Review Sections remain same */}
               <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-8 shadow-xl border border-white">
                 <h3 className="text-xl font-black text-gray-800 mb-6 flex items-center gap-2">🏆 Top 5 Leaderboard</h3>
                 <div className="space-y-3">
